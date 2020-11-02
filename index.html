@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TS ECS</title>
+</head>
+<body>
+  <!-- load before AMD so it goes on window -->
+  <script src="./node_modules/pixi.js/dist/pixi.js"></script>
+  <!-- load almond, our amd implementation -->
+  <script src="./node_modules/almond/almond.js"></script>
+  <!-- AMD module loads after almond -->
+  <script src="./dist/bundle.js"></script>
+</body>
+</html>
