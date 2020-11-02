@@ -1,4 +1,4 @@
-const { Application, Sprite, utils } = PIXI; 
+const { Application, Rectangle, Sprite, utils } = PIXI; 
 const loader = PIXI.Loader.shared;
 const resources = loader.resources;
 
@@ -11,16 +11,17 @@ utils.sayHello(type);
 
 const app = new Application({ width: 256, height: 256 });
 document.body.appendChild(app.view);
-app.renderer.backgroundColor = 0x061639;
 
 loader
-  .add("assets/cat.png")
+  .add("assets/spritesheet_01.png")
   .load(setup);
 
 function setup() {
-  const cat = new Sprite(resources["assets/cat.png"].texture);
-  cat.position.set(128, 128);
-  cat.anchor.set(0.5, 0.5);
-  cat.rotation = Math.PI;
-  app.stage.addChild(cat);
+  const texture = resources["assets/spritesheet_01.png"].texture;
+  const rectangle = new Rectangle(96, 64, 32, 32);
+  texture.frame = rectangle;
+  const rocket = new Sprite(texture);
+  rocket.position.set(32, 32);
+  app.stage.addChild(rocket);
+  app.renderer.render(app.stage);
 }
