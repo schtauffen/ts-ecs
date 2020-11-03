@@ -8,7 +8,7 @@
     "outDir": "./dist",
     "outFile": "./dist/bundle.js",
     // "moduleResolution": "node",
-    "watch": true,
+    // "watch": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "strict": true,                           /* Enable all strict type-checking options. */
