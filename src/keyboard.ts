@@ -9,15 +9,18 @@ export interface KeyInfo  {
   release: Fn,
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
+
 // TODO - Key type / enumeration
 export function keyboard(value: string): KeyInfo {
   const key = {
     value,
     isDown: false,
     isUp: true,
-    press: () => {},
-    release: () => {},
-    unsubscribe: () => {},
+    press: noop,
+    release: noop,
+    unsubscribe: noop,
   };
 
   const downHandler = (evt: KeyboardEvent) => {

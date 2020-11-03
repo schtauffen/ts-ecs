@@ -7,7 +7,7 @@
     "module": "amd",                     /* Specify module code generation: 'none', 'commonjs', 'amd', 'system', 'umd', 'es2015', 'es2020', or 'ESNext'. */
     "outDir": "./dist",
     "outFile": "./dist/bundle.js",
-    // "moduleResolution": "node",
+    "moduleResolution": "node",
     // "watch": true,
     "sourceMap": true,
     "esModuleInterop": true,

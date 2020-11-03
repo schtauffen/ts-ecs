@@ -1,4 +1,6 @@
 import { keyboard } from './keyboard';
+import { EntityBuilder, Query } from "./ecs";
+import { Name, Velocity } from './components';
 
 const { Application, Sprite, Text, utils } = PIXI; 
 const loader = PIXI.Loader.shared;
@@ -35,11 +37,10 @@ class VelocitySprite extends Sprite {
     super(texture);
     this.vx = 0;
     this.vy = 0;
-    const self = this;
     this.velocity = {
-      set (vx, vy) {
-        self.vx = vx; 
-        self.vy = vy;
+      set: (vx, vy) => {
+        this.vx = vx; 
+        this.vy = vy;
       }
     }
   }
@@ -51,6 +52,7 @@ class VelocitySprite extends Sprite {
 }
 
 function setup() {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const id = resources["assets/treasure-hunter.json"].textures!;
 
   const dungeon = new Sprite(id["dungeon.png"]);
@@ -131,4 +133,13 @@ function hitTestRectangle(sprite1: PIXI.Sprite, sprite2: PIXI.Sprite): boolean {
     sprite1.y + sprite1.height  < sprite2.y ||
     sprite1.y > sprite2.y + sprite2.height
   );
+}
+
+new EntityBuilder().with(new Velocity(1, 0)).with(new Name("bob")).build();
+new EntityBuilder().with(new Velocity()).build();
+new EntityBuilder().with(new Velocity(-1, -1)).with(new Name("ross")).build();
+
+const query = new Query(Velocity, Name); 
+for (const [entity, [velocity, name]] of query.result()) {
+  console.log(`${name.name}(${entity}) vx=${velocity.vx} vy=${velocity.vy}`);
 }
