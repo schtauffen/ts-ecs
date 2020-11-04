@@ -139,7 +139,8 @@ new EntityBuilder().with(new Velocity(1, 0)).with(new Name("bob")).build();
 new EntityBuilder().with(new Velocity()).build();
 new EntityBuilder().with(new Velocity(-1, -1)).with(new Name("ross")).build();
 
-const query = new Query(Velocity, Name); 
-for (const [entity, [velocity, name]] of query.result()) {
-  console.log(`${name.name}(${entity}) vx=${velocity.vx} vy=${velocity.vy}`);
+const query = Query(Velocity, Name); 
+for (const [velocity, name] of query.result()) {
+  console.log((velocity as any).vx);
+  console.log(name.name);
 }

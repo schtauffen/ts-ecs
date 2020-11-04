@@ -1,52 +1,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-declare const BitSet: any; // TODO - why doesn't BitSet load from main.d.ts?
+declare const BitSet: any;
 let componentId = 0;
-const components: IComponent[][] = []; // TODO - do we need to manage array growth?
+const components: any[][] = [];
 
-interface IConstructor {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  new (...args: any[]): {};
-}
-
-export interface IComponent {
-  readonly "@@id": number;
-}
-
-export interface IQuery {
-  readonly "@@id": number;
-  readonly "@@not": boolean;
-  not(): IQuery;
-}
-
-interface IQueryAndComponentConstructor {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  new (...args: any[]): IComponent;
-  readonly "@@id": number;
-  readonly "@@not": boolean;
-  not(): IQuery;
-}
-
-export function component(constructor: IConstructor): IQueryAndComponentConstructor {
+export function Component<T extends { new(...args: any): any }>(target: T): T {
   const currentId = componentId++;
-  components[currentId] = components[currentId] || [];
+  target.prototype["@@id"] = currentId;
+  (target as any)["@@id"] = currentId;
+  components[currentId] = [];
+  return target;
+}
 
-  return class Component extends constructor {
-    static readonly "@@id" = currentId;
-    static readonly "@@not" = false;
-    static not(): IQuery {
-      return {
-        "@@id": currentId,
-        "@@not": true,
-        not() { return Component },
-      };
-    }
-
-    readonly "@@id" = currentId;
-
-    constructor(...args: any[]) {
-      super(...args);
-    }
+interface IQueryable {
+  "@@id": number;
+}
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface Queryable {}
+function isQueryable(t: any): t is IQueryable {
+  if (t && typeof t["@@id"] === 'number') {
+    return true;
   }
+  return false;
 }
 
 export type Entity = number;
@@ -55,7 +29,7 @@ const livingEntities: Map<Entity, typeof BitSet> = new Map();
 // const dead_entities: Entity[] = [];
 
 export class EntityBuilder {
-  private components: IComponent[] = [];
+  private components: IQueryable[] = [];
 
   constructor() {
     this.build.bind(this);
@@ -73,46 +47,56 @@ export class EntityBuilder {
     return currentId;
   }
 
-  with(component: IComponent): EntityBuilder {
+  with(component: Queryable): EntityBuilder {
+    if (!isQueryable(component)) throw new TypeError(`Not queryable ${typeof component}`);
     this.components.push(component);
     return this;
   }
 }
 
-const ZERO_BIT_SET = new BitSet();
-export class Query {
-  private has = new BitSet();
-  private hasnt = new BitSet();
-  private toReturn: IQuery[] = [];
+// TODO - function that returns { not(query), result() } object
+interface IQueryTemplate<T> {
+  query: T;
+  hasnt: typeof BitSet;
+  has: typeof BitSet;
+}
 
-  constructor(...queries: IQuery[]) {
+interface IQueryChain<T> {
+  not(...notQueries: IQueryable[]): IQueryChain<T>;
+  result(): T[]; 
+}
 
-    for (let i = 0; i < queries.length; ++i) {
-      if (queries[i]["@@not"]) {
-        this.hasnt.set(queries[i]["@@id"], 1);
-      } else {
-        this.toReturn.push(queries[i]);
-        this.has.set(queries[i]["@@id"], 1);
+function createQueryChain<T extends any[]>(template: IQueryTemplate<T>): IQueryChain<T> {
+  return {
+    not(...hasnt: IQueryable[]) {
+      return createQueryChain({ ...template, hasnt });
+    },
+    result() {
+      const entities: Entity[] = [];
+      for (const [entity, bitset] of livingEntities.entries()) {
+        if (template.has.and(bitset).equals(template.has) && template.hasnt.and(bitset).equals(0)) {
+          entities.push(entity);
+        }
       }
+
+      const results = [];
+      for (const entity of entities) {
+        const result = [];
+        for (const query of template.query) {
+          result.push(components[query["@@id"]][entity])
+        }
+        results.push(result);
+      }
+      return results as T[];
     }
   }
+}
 
-  // TODO - lazy iterator
-  // TODO - memoize results
-  // TODO - typings for [Entity, [A, B, ...]]? (MACROS?)
-  //        or link to generics somehow? Query<A, B> -> [Entity, [A, B]]
-  result(): [Entity, any[]][] {
-    const entities: Entity[] = [];
-    for (const [entity, bitset] of livingEntities.entries()) {
-      if (this.has.and(bitset).equals(this.has) && this.hasnt.and(bitset).equals(ZERO_BIT_SET)) {
-        entities.push(entity);
-      }
-    }
-
-    return entities.map(entity => {
-      return [entity, this.toReturn.map(query => {
-        return components[query["@@id"]][entity]
-      })];
-    })
+export function Query<T extends any[]>(...query: T): IQueryChain<T> {
+  const has = BitSet();
+  for (const q of query) {
+    if (!isQueryable(q)) throw new TypeError(`Expected Component, received "${typeof q}"`);
+    has.set(q["@@id"], 1);
   }
+  return createQueryChain<T>({ query: query, has, hasnt: BitSet() });
 }
