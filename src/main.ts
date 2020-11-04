@@ -1,6 +1,7 @@
 import { keyboard } from './keyboard';
-import { EntityBuilder, Query } from "./ecs";
-import { Name, Velocity } from './components';
+// import { EntityBuilder, Query } from "./ecs";
+// import { Name, Velocity } from './components';
+import "./tut";
 
 const { Application, Sprite, Text, utils } = PIXI; 
 const loader = PIXI.Loader.shared;
@@ -135,12 +136,12 @@ function hitTestRectangle(sprite1: PIXI.Sprite, sprite2: PIXI.Sprite): boolean {
   );
 }
 
-new EntityBuilder().with(new Velocity(1, 0)).with(new Name("bob")).build();
-new EntityBuilder().with(new Velocity()).build();
-new EntityBuilder().with(new Velocity(-1, -1)).with(new Name("ross")).build();
+// new EntityBuilder().with(new Velocity(1, 0)).with(new Name("bob")).build();
+// new EntityBuilder().with(new Velocity()).build();
+// new EntityBuilder().with(new Velocity(-1, -1)).with(new Name("ross")).build();
 
-const query = Query(Velocity, Name); 
-for (const [velocity, name] of query.result()) {
-  console.log((velocity as any).vx);
-  console.log(name.name);
-}
+// const query = Query(Velocity, Name); 
+// for (const [velocity, name] of query.result()) {
+//   console.log((velocity as unknown as Velocity).vx);
+//   console.log(name.name);
+// }
