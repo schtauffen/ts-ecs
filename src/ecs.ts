@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { InstanceTypes, Entity } from './instance-types';
+export * from './instance-types';
 declare const BitSet: any;
+
+// TODO - should be owned by a "World"
 let componentId = 0;
 const components: any[][] = [];
 
@@ -11,11 +15,15 @@ export function Component<T extends { new(...args: any): any }>(target: T): T {
   return target;
 }
 
+// TODO IQueryable fix... to reflect metadata?
 interface IQueryable {
   "@@id": number;
 }
+interface IQueryableConstructor {
+  new(...args: any) : any;
+}
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface Queryable {}
+interface Queryable {} // Placeholder type to hint to users
 function isQueryable(t: any): t is IQueryable {
   if (t && typeof t["@@id"] === 'number') {
     return true;
@@ -23,9 +31,8 @@ function isQueryable(t: any): t is IQueryable {
   return false;
 }
 
-export type Entity = number;
-let entityId: Entity = 0;
-const livingEntities: Map<Entity, typeof BitSet> = new Map();
+let entityId = 0;
+const livingEntities: Map<number, typeof BitSet> = new Map();
 // const dead_entities: Entity[] = [];
 
 export class EntityBuilder {
@@ -54,49 +61,46 @@ export class EntityBuilder {
   }
 }
 
-// TODO - function that returns { not(query), result() } object
-interface IQueryTemplate<T> {
-  query: T;
-  hasnt: typeof BitSet;
-  has: typeof BitSet;
-}
+export class Query<T extends IQueryableConstructor[]> {
+  private query: IQueryable[];
+  private has = new BitSet();
+  private hasnt = new BitSet();
 
-interface IQueryChain<T> {
-  not(...notQueries: IQueryable[]): IQueryChain<T>;
-  result(): T[]; 
-}
+  constructor(...query: T) {
+    const queryable = Array(query.length);
+    for (const [idx, q] of query.entries()) {
+      if (!isQueryable(q)) throw new TypeError(`Expected Component type, received ${q}`)
+      this.has.set(q["@@id"], 1);
+      queryable[idx] = q;
+    }
+    // safe because it is validated above
+    this.query = queryable;
+  }
 
-function createQueryChain<T extends any[]>(template: IQueryTemplate<T>): IQueryChain<T> {
-  return {
-    not(...hasnt: IQueryable[]) {
-      return createQueryChain({ ...template, hasnt });
-    },
-    result() {
-      const entities: Entity[] = [];
-      for (const [entity, bitset] of livingEntities.entries()) {
-        if (template.has.and(bitset).equals(template.has) && template.hasnt.and(bitset).equals(0)) {
-          entities.push(entity);
-        }
-      }
+  not(...query: IQueryableConstructor[]): Query<T> {
+    for (const q of query) {
+      if (!isQueryable(q)) throw new TypeError(`Expected Component type, received ${q}`)
+      this.hasnt.set(q["@@id"], 1);
+    }
+    return this;
+  }
 
-      const results = [];
-      for (const entity of entities) {
-        const result = [];
-        for (const query of template.query) {
-          result.push(components[query["@@id"]][entity])
+  // TODO - make to return lazy iterator. -or- should be another function?
+  result(): InstanceTypes<T>[] {
+    const results = [];
+
+    for (const [entity, bitset] of livingEntities.entries()) {
+      if (this.has.and(bitset).equals(this.has) && this.hasnt.and(bitset).equals(0)) {
+        const result = new Array(this.query.length);
+        for (const [idx, query] of this.query.entries()) {
+          result[idx] === Entity
+            ? entity
+            : components[query["@@id"]][entity];
         }
         results.push(result);
       }
-      return results as T[];
     }
-  }
-}
 
-export function Query<T extends any[]>(...query: T): IQueryChain<T> {
-  const has = BitSet();
-  for (const q of query) {
-    if (!isQueryable(q)) throw new TypeError(`Expected Component, received "${typeof q}"`);
-    has.set(q["@@id"], 1);
+    return results as unknown as InstanceTypes<T>[];
   }
-  return createQueryChain<T>({ query: query, has, hasnt: BitSet() });
 }
