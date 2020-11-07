@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// source: https://medium.com/free-code-camp/typescript-curry-ramda-types-f747e99744ab
 export type Length<T extends any[]> = T['length']
 
 export type Cast<X, Y> = X extends Y ? X : Y;

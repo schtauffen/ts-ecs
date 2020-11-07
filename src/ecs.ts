@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// TODO - move to library and publish to npm (utilize bit.dev?)
 import type { Cast, Prepend, Pos, Reverse, Length, Next } from './type-utils';
 export * from './type-utils';
 declare const BitSet: any;
@@ -33,6 +34,11 @@ type ReturnTypes<
   []
 >
 
+// TODO - also allow classes
+// TODO - more ergonomic handling (instead of .with(Name)(...args))
+//    export const Component = component(() => {...}) ??
+//    -> with(Name(...args))
+//    also lets us go back to using an integer with array instead of Map<ComponentFactory, ..>
 type Component = Record<string, any>;
 interface ComponentFactory {
   (...args: any): Component;
@@ -44,10 +50,10 @@ export function Entity (): { "@@entity": true } {
 
 //  World
 //    Resources
-//  ✓ Entities
-//  ✓ Components
-//    Systems
-interface IWorld {
+//    Entities ✓
+//    Components ✓
+//    Systems // TODO - evaluate parrallel execution in the future
+export interface IWorld {
   register(factory: ComponentFactory): IWorld;
   get<T extends ComponentFactory>(factory: T, entity: number): ReturnType<T> | null;
   add<T extends ComponentFactory>(factory: T, entity: number): BoundFactory<void, T>;
@@ -75,6 +81,7 @@ export function World(): IWorld {
   const componentsMap: Map<ComponentFactory, Component[]> = new Map();
   const componentsBit: Map<ComponentFactory, number> = new Map();
   const entities: Map<number, typeof BitSet> = new Map();
+  // DEBUG
   const w = window as any;
   w.componentsMap = componentsMap;
   w.componentsBit = componentsBit;
@@ -117,7 +124,6 @@ export function World(): IWorld {
       return typeof component === undefined ? null : component as ReturnType<T>;
     },
 
-    // TODO - lazy iterator?
     query<T extends ComponentFactory[]>(...factories: T): QueryBuilder<ReturnTypes<T>[]> {
       const has = toBitset(factories);
       let hasnt = BitSet();
@@ -129,6 +135,7 @@ export function World(): IWorld {
           return query;
         },
 
+        // TODO - add lazy iterator: (lazy() ?)
         result() {
           const results: any[] = [];
           for (const [entity, bitset] of entities.entries()) {
@@ -169,7 +176,7 @@ export function World(): IWorld {
               throw new TypeError(`Attempted to add unknown Component to entity: ${factory.name}`);
             }
 
-            components[entity] = factory(args);
+            components[entity] = factory(...args);
             entityMask.set(bit, 1);
           }
           entities.set(entity, entityMask);
@@ -178,8 +185,8 @@ export function World(): IWorld {
       };
     },
 
-    add(factory, entity) {
-      return (...args) => {
+    add<T extends ComponentFactory>(factory: T, entity: number): BoundFactory<void, T> {
+      return (...args: Parameters<T>) => {
         const entityMask = entities.get(entity);
         if (entityMask === undefined) {
           throw new TypeError(`Attempted to add Component to unknown entity.`);
@@ -191,7 +198,7 @@ export function World(): IWorld {
           throw new TypeError(`Attempted to add unknown Component to entity: ${factory.name}`);
         }
 
-        components[entity] = factory(args);
+        components[entity] = factory(...args as any); // TODO - why is this cast to any needed?
         entityMask.set(bit, 1);
       };
     },
@@ -213,7 +220,18 @@ export function World(): IWorld {
     },
 
     delete(entity) {
-      // TODO - component clean up... ?
+      // TODO - would get cleaned up by transition to number id'd components
+      // TODO - delay and batch?
+      // TODO - reuse deleted entity id's
+      const entityMask = entities.get(entity);
+      for (const cid of entityMask.toArray()) {
+        for (const [factory, bit] of componentsBit.entries()) {
+          if (bit === cid) {
+            world.remove(factory, bit);
+            break;
+          }
+        }
+      }
       entities.delete(entity);
     },
   } as IWorld;
