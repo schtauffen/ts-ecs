@@ -39,6 +39,7 @@ type ReturnTypes<
 //    export const Component = component(() => {...}) ??
 //    -> with(Name(...args))
 //    also lets us go back to using an integer with array instead of Map<ComponentFactory, ..>
+// TODO - allow selection of Array or Map for speed characteristics?
 type Component = Record<string, any>;
 interface ComponentFactory {
   (...args: any): Component;
@@ -136,6 +137,7 @@ export function World(): IWorld {
         },
 
         // TODO - add lazy iterator: (lazy() ?)
+        // TODO - might not need #result/lazy() call if we implement Iterator for QueryBuilder?
         result() {
           const results: any[] = [];
           for (const [entity, bitset] of entities.entries()) {
