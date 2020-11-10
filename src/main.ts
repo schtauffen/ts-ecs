@@ -1,6 +1,10 @@
 // adapted from https://github.com/kittykatattack/learningPixi
-import { World, IWorld, Entity } from './ecs';
-import { keyboard } from './keyboard';
+import type { IWorld } from 'cat-herder';
+import { keyboard, KeyInfo } from './keyboard';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const CatHerder: any;
+const { World, Entity } = CatHerder;
 
 const { Application, Graphics, Sprite, Text, utils, Container, TextStyle } = PIXI; 
 const loader = PIXI.Loader.shared;
@@ -30,19 +34,27 @@ loader
   .add("assets/treasure-hunter.json")
   .load(setup);
 
-// TODO - resources
-let state: (world: IWorld, delta: number) => void; // TODO - enum?
-let id: PIXI.ITextureDictionary; // TODO - resource
-let gameScene: PIXI.Container;
-let gameOverScene: PIXI.Container;
-const left = keyboard('ArrowLeft');
-const up = keyboard('ArrowUp');
-const right = keyboard('ArrowRight');
-const down = keyboard('ArrowDown');
-let player: number;
-let outerBar: PIXI.Graphics;
-let message: PIXI.Text;
+enum State {
+  Play,
+  End,
+}
 
+interface Resources {
+  id: PIXI.ITextureDictionary;
+  gameScene: PIXI.Container;
+  gameOverScene: PIXI.Container;
+  left: KeyInfo;
+  right: KeyInfo;
+  up: KeyInfo;
+  down: KeyInfo;
+  player: number;
+  outerBar: PIXI.Graphics;
+  message: PIXI.Text;
+  delta: number;
+  state: State,
+}
+
+// Components
 interface IRenderable { sprite: PIXI.Sprite; }
 const Renderable = (sprite: PIXI.Sprite): IRenderable => ({ sprite });
 const SpriteAdded = () => ({});
@@ -57,8 +69,7 @@ const PickupAble = () => ({});
 const Exit = () => ({});
 
 function setup() {
-  gameScene = new Container();
-  const world = World();
+  const gameScene = new Container();
   // TODO - app to resource
   // TODO - gameScene to resource
   app.stage.addChild(gameScene);
@@ -68,7 +79,52 @@ function setup() {
   if (typeof maybeId === 'undefined') {
     throw new TypeError('Expected resources to load');
   }
-  id = maybeId;
+  const id = maybeId;
+  const healthBar = new Container();
+  healthBar.position.set(MAP_WIDTH - 170, 4);
+  healthBar.zIndex = 1000;
+  gameScene.addChild(healthBar);
+
+  const innerBar = new Graphics();
+  innerBar.beginFill(0x000000);
+  innerBar.drawRect(0, 0, 128, 8);
+  innerBar.endFill();
+  healthBar.addChild(innerBar);
+
+  const outerBar = new Graphics();
+  outerBar.beginFill(0xFF3300);
+  outerBar.drawRect(0, 0, 128, 8);
+  outerBar.endFill();
+  healthBar.addChild(outerBar);
+
+  const gameOverScene = new Container();
+  app.stage.addChild(gameOverScene);
+  gameOverScene.visible = false;
+
+  const style = new TextStyle({
+    fontFamily: "Futura",
+    fontSize: 64,
+    fill: "white"
+  })
+  const message = new Text("The End!", style);
+  message.x = (MAP_WIDTH - message.width) / 2;
+  message.y = (MAP_HEIGHT - message.height) / 2;
+  gameOverScene.addChild(message);
+
+  const world: IWorld<Resources> = World({
+    id,
+    gameScene,
+    gameOverScene,
+    player: 0,
+    left: keyboard('ArrowLeft'),
+    right: keyboard('ArrowRight'),
+    up: keyboard('ArrowUp'),
+    down: keyboard('ArrowDown'),
+    state: State.Play,
+    outerBar,
+    message,
+    delta: 1,
+  });
 
   world
     .register(Renderable)
@@ -79,6 +135,14 @@ function setup() {
     .register(Life)
     .register(Exit)
     .register(PickupAble)
+    .system(pixiSystem)
+    .system(playerInputSystem)
+    .system(movementSystem)
+    .system(blobAISystem)
+    .system(pixiSpritePositionSystem)
+    .system(carrySystem)
+    .system(obstacleSystem)
+    .system(winningSystem)
     ;
 
   world.entity()
@@ -92,7 +156,7 @@ function setup() {
     .build();
 
   const explorer = new Sprite(id["explorer.png"]);
-  player = world.entity()
+  world.resources.player = world.entity()
     .with(Renderable)(explorer)
     .with(Position)(68, MAP_HEIGHT / 2 - explorer.height / 2)
     .with(Velocity)(0, 0)
@@ -130,76 +194,45 @@ function setup() {
     direction *= -1;
   }
 
-  // UI
-  // TODO - resourcify
-  const healthBar = new Container();
-  healthBar.position.set(MAP_WIDTH - 170, 4);
-  healthBar.zIndex = 1000;
-  gameScene.addChild(healthBar);
+  app.ticker.add((delta: number) => {
+    world.resources.delta = delta;
 
-  const innerBar = new Graphics();
-  innerBar.beginFill(0x000000);
-  innerBar.drawRect(0, 0, 128, 8);
-  innerBar.endFill();
-  healthBar.addChild(innerBar);
-
-  outerBar = new Graphics();
-  outerBar.beginFill(0xFF3300);
-  outerBar.drawRect(0, 0, 128, 8);
-  outerBar.endFill();
-  healthBar.addChild(outerBar);
-
-  gameOverScene = new Container();
-  app.stage.addChild(gameOverScene);
-  gameOverScene.visible = false;
-
-  const style = new TextStyle({
-    fontFamily: "Futura",
-    fontSize: 64,
-    fill: "white"
-  })
-  message = new Text("The End!", style);
-  message.x = (MAP_WIDTH - message.width) / 2;
-  message.y = (MAP_HEIGHT - message.height) / 2;
-  gameOverScene.addChild(message);
-
-  state = play;
-
-  app.ticker.add((delta: number) => gameLoop(world, delta));
+    switch (world.resources.state) {
+      case State.Play: return world.update();
+      default: {
+        world.resources.gameScene.visible = false;
+        world.resources.gameOverScene.visible = true;
+      }
+    }
+  });
 }
 
-function gameLoop(world: IWorld, delta: number) {
-  state(world, delta);
-}
-
-function play(world: IWorld, delta: number) {
-  // systems (TODO: move into world.system())
-  // TODO - find nice way for pixi and ecs to play nicely together
-
-  // PIXI.js system
+// Systems
+function pixiSystem(world: IWorld<Resources>) {
   for (const [entity, renderable] of world.query(Entity, Renderable).not(SpriteAdded).result()) {
-    gameScene.addChild(renderable.sprite);
-    gameScene.children.sort((a, b) => a.zIndex - b.zIndex);
+    world.resources.gameScene.addChild(renderable.sprite);
+    world.resources.gameScene.children.sort((a, b) => a.zIndex - b.zIndex);
     world.add(SpriteAdded, entity)();
   }
+}
 
-  // Player system
+function playerInputSystem(world: IWorld<Resources>) {
   const PLAYER_SPEED = 1.5;
-  const playerVelocity = world.get(Velocity, player);
+  const playerVelocity = world.get(Velocity, world.resources.player);
   if (playerVelocity) {
     let vx = 0;
     let vy = 0;
 
-    if (left.isDown) {
+    if (world.resources.left.isDown) {
       vx -= PLAYER_SPEED;
     }
-    if (right.isDown) {
+    if (world.resources.right.isDown) {
       vx += PLAYER_SPEED;
     }
-    if (up.isDown) {
+    if (world.resources.up.isDown) {
       vy -= PLAYER_SPEED;
     }
-    if (down.isDown) {
+    if (world.resources.down.isDown) {
       vy += PLAYER_SPEED;
     }
 
@@ -211,14 +244,16 @@ function play(world: IWorld, delta: number) {
     playerVelocity.vx = vx;
     playerVelocity.vy = vy;
   }
+}
 
-  // movement/phsyics system
+function movementSystem(world: IWorld<Resources>) {
   for (const [position, velocity] of world.query(Position, Velocity).result()) {
-    position.x += delta * velocity.vx;
-    position.y += delta * velocity.vy;
+    position.x += world.resources.delta * velocity.vx;
+    position.y += world.resources.delta * velocity.vy;
   }
+}
 
-  // ai system
+function blobAISystem(world: IWorld<Resources>) {
   for (const [position, velocity, renderable] of world.query(Position, Velocity, Renderable, Blob).result()) {
     if (position.y <= 0) {
       position.y = 0;
@@ -228,15 +263,18 @@ function play(world: IWorld, delta: number) {
       velocity.vy *= -1;
     }
   }
+}
 
-  // ??? system
+function pixiSpritePositionSystem(world: IWorld<Resources>) {
   for (const [position, renderable] of world.query(Position, Renderable).result()) {
     renderable.sprite.position.set(position.x, position.y);
   }
+}
 
-  // Carry system
-  const playerRender = world.get(Renderable, player);
-  const playerPosition = world.get(Position, player);
+function carrySystem(world: IWorld<Resources>) {
+  const playerRender = world.get(Renderable, world.resources.player);
+  const playerPosition = world.get(Position, world.resources.player);
+
   if (playerRender != null && playerPosition != null) {
     for (const [render, position] of world.query(Renderable, Position, PickupAble).result()) {
       if (hitTestRectangle(render.sprite, playerRender.sprite)) {
@@ -245,11 +283,11 @@ function play(world: IWorld, delta: number) {
       }
     }
   }
+}
 
-  // TODO - hitbox should live in own component
-  // TODO - component should determine if two objects can collide
-  // "combat" system
-  const playerLife = world.get(Life, player);
+function obstacleSystem(world: IWorld<Resources>) {
+  const playerRender = world.get(Renderable, world.resources.player);
+  const playerLife = world.get(Life, world.resources.player);
   if (playerRender != null && playerLife != null) {
     for (const [render,] of world.query(Renderable, Blob).result()) {
       if (hitTestRectangle(render.sprite, playerRender.sprite)) {
@@ -258,30 +296,26 @@ function play(world: IWorld, delta: number) {
     }
 
     if (playerLife.current <= 0) {
-      message.text = "You Lost";
-      state = end;
+      world.resources.message.text = "You Lost";
+      world.resources.state = State.End;
     } else {
-      outerBar.width = 128 * (playerLife.current / playerLife.max);
+      world.resources.outerBar.width = 128 * (playerLife.current / playerLife.max);
     }
   }
+}
 
-  // only ok since we know there is only 1 "pickupable" and exit
+function winningSystem(world: IWorld<Resources>) {
   for (const [pickupRender,] of world.query(Renderable, PickupAble).result()) {
     for (const [exitRender,] of world.query(Renderable, Exit).result()) {
       if (hitTestRectangle(pickupRender.sprite, exitRender.sprite)) {
-        message.text = "You Win!"
-        state = end;
+        world.resources.message.text = "You Win!"
+        world.resources.state = State.End;
       }
     }
   }
 }
 
-function end() {
-  gameScene.visible = false;
-  gameOverScene.visible = true;
-  // TODO - way to restart
-}
-
+// utils
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
