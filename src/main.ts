@@ -1,11 +1,13 @@
 // adapted from https://github.com/kittykatattack/learningPixi
-import type { IWorld } from 'cat-herder';
+import type { World as IWorld, Key } from 'cat-herder';
 import { keyboard, KeyInfo } from './keyboard';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const CatHerder: any;
-const { World, Entity } = CatHerder;
+declare const catHerder: any;
+const { World, Entity, createTag } = catHerder;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const PIXI: any;
 const { Application, Graphics, Sprite, Text, utils, Container, TextStyle } = PIXI; 
 const loader = PIXI.Loader.shared;
 const resources = loader.resources;
@@ -47,7 +49,7 @@ interface Resources {
   right: KeyInfo;
   up: KeyInfo;
   down: KeyInfo;
-  player: number;
+  player: Key;
   outerBar: PIXI.Graphics;
   message: PIXI.Text;
   delta: number;
@@ -57,16 +59,16 @@ interface Resources {
 // Components
 interface IRenderable { sprite: PIXI.Sprite; }
 const Renderable = (sprite: PIXI.Sprite): IRenderable => ({ sprite });
-const SpriteAdded = () => ({});
+const SpriteAdded = createTag();
 interface IPosition { x: number, y: number }
 const Position = (x: number, y: number): IPosition => ({ x, y });
 interface IVelocity { vx: number, vy: number }
 const Velocity = (vx: number, vy: number): IVelocity => ({ vx, vy });
-const Blob = () => ({});
+const Blob = createTag();
 interface ILife { current: number, max: number }
 const Life = (current: number, max: number): ILife => ({ current, max });
-const PickupAble = () => ({});
-const Exit = () => ({});
+const PickupAble = createTag();
+const Exit = createTag();
 
 function setup() {
   const gameScene = new Container();
@@ -111,7 +113,7 @@ function setup() {
   message.y = (MAP_HEIGHT - message.height) / 2;
   gameOverScene.addChild(message);
 
-  const world: IWorld<Resources> = World({
+  const world: IWorld<Resources> = new World({
     id,
     gameScene,
     gameOverScene,
@@ -209,7 +211,7 @@ function setup() {
 
 // Systems
 function pixiSystem(world: IWorld<Resources>) {
-  for (const [entity, renderable] of world.query(Entity, Renderable).not(SpriteAdded).result()) {
+  for (const [entity, renderable] of world.query(Entity, Renderable).not(SpriteAdded)) {
     world.resources.gameScene.addChild(renderable.sprite);
     world.resources.gameScene.children.sort((a, b) => a.zIndex - b.zIndex);
     world.add(SpriteAdded, entity)();
@@ -247,14 +249,14 @@ function playerInputSystem(world: IWorld<Resources>) {
 }
 
 function movementSystem(world: IWorld<Resources>) {
-  for (const [position, velocity] of world.query(Position, Velocity).result()) {
+  for (const [position, velocity] of world.query(Position, Velocity)) {
     position.x += world.resources.delta * velocity.vx;
     position.y += world.resources.delta * velocity.vy;
   }
 }
 
 function blobAISystem(world: IWorld<Resources>) {
-  for (const [position, velocity, renderable] of world.query(Position, Velocity, Renderable, Blob).result()) {
+  for (const [position, velocity, renderable] of world.query(Position, Velocity, Renderable, Blob)) {
     if (position.y <= 0) {
       position.y = 0;
       velocity.vy *= -1;
@@ -266,7 +268,7 @@ function blobAISystem(world: IWorld<Resources>) {
 }
 
 function pixiSpritePositionSystem(world: IWorld<Resources>) {
-  for (const [position, renderable] of world.query(Position, Renderable).result()) {
+  for (const [position, renderable] of world.query(Position, Renderable)) {
     renderable.sprite.position.set(position.x, position.y);
   }
 }
@@ -276,7 +278,7 @@ function carrySystem(world: IWorld<Resources>) {
   const playerPosition = world.get(Position, world.resources.player);
 
   if (playerRender != null && playerPosition != null) {
-    for (const [render, position] of world.query(Renderable, Position, PickupAble).result()) {
+    for (const [render, position] of world.query(Renderable, Position, PickupAble)) {
       if (hitTestRectangle(render.sprite, playerRender.sprite)) {
         position.x = playerPosition.x + (playerRender.sprite.width - render.sprite.width) / 2;
         position.y = playerPosition.y;
@@ -289,7 +291,7 @@ function obstacleSystem(world: IWorld<Resources>) {
   const playerRender = world.get(Renderable, world.resources.player);
   const playerLife = world.get(Life, world.resources.player);
   if (playerRender != null && playerLife != null) {
-    for (const [render,] of world.query(Renderable, Blob).result()) {
+    for (const [render,] of world.query(Renderable, Blob)) {
       if (hitTestRectangle(render.sprite, playerRender.sprite)) {
         playerLife.current -= 1;
       }
@@ -305,8 +307,8 @@ function obstacleSystem(world: IWorld<Resources>) {
 }
 
 function winningSystem(world: IWorld<Resources>) {
-  for (const [pickupRender,] of world.query(Renderable, PickupAble).result()) {
-    for (const [exitRender,] of world.query(Renderable, Exit).result()) {
+  for (const [pickupRender,] of world.query(Renderable, PickupAble)) {
+    for (const [exitRender,] of world.query(Renderable, Exit)) {
       if (hitTestRectangle(pickupRender.sprite, exitRender.sprite)) {
         world.resources.message.text = "You Win!"
         world.resources.state = State.End;
