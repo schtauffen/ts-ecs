@@ -1,10 +1,11 @@
 // adapted from https://github.com/kittykatattack/learningPixi
-import type { World as IWorld, Key } from 'cat-herder';
+import type * as CatHerder from 'cat-herder';
 import { keyboard, KeyInfo } from './keyboard';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const catHerder: any;
+// Bundling cat-herder would have better ergonomics, but this is doable
+declare const catHerder: typeof CatHerder;
 const { World, Entity, createTag } = catHerder;
+type Key = CatHerder.Key;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const PIXI: any;
@@ -113,11 +114,11 @@ function setup() {
   message.y = (MAP_HEIGHT - message.height) / 2;
   gameOverScene.addChild(message);
 
-  const world: IWorld<Resources> = new World({
+  const world: CatHerder.World<Resources> = new World({
     id,
     gameScene,
     gameOverScene,
-    player: 0,
+    player: {generation: 1, index: -1},
     left: keyboard('ArrowLeft'),
     right: keyboard('ArrowRight'),
     up: keyboard('ArrowUp'),
@@ -210,7 +211,7 @@ function setup() {
 }
 
 // Systems
-function pixiSystem(world: IWorld<Resources>) {
+function pixiSystem(world: CatHerder.World<Resources>) {
   for (const [entity, renderable] of world.query(Entity, Renderable).not(SpriteAdded)) {
     world.resources.gameScene.addChild(renderable.sprite);
     world.resources.gameScene.children.sort((a, b) => a.zIndex - b.zIndex);
@@ -218,7 +219,7 @@ function pixiSystem(world: IWorld<Resources>) {
   }
 }
 
-function playerInputSystem(world: IWorld<Resources>) {
+function playerInputSystem(world: CatHerder.World<Resources>) {
   const PLAYER_SPEED = 1.5;
   const playerVelocity = world.get(Velocity, world.resources.player);
   if (playerVelocity) {
@@ -248,14 +249,14 @@ function playerInputSystem(world: IWorld<Resources>) {
   }
 }
 
-function movementSystem(world: IWorld<Resources>) {
+function movementSystem(world: CatHerder.World<Resources>) {
   for (const [position, velocity] of world.query(Position, Velocity)) {
     position.x += world.resources.delta * velocity.vx;
     position.y += world.resources.delta * velocity.vy;
   }
 }
 
-function blobAISystem(world: IWorld<Resources>) {
+function blobAISystem(world: CatHerder.World<Resources>) {
   for (const [position, velocity, renderable] of world.query(Position, Velocity, Renderable, Blob)) {
     if (position.y <= 0) {
       position.y = 0;
@@ -267,13 +268,13 @@ function blobAISystem(world: IWorld<Resources>) {
   }
 }
 
-function pixiSpritePositionSystem(world: IWorld<Resources>) {
+function pixiSpritePositionSystem(world: CatHerder.World<Resources>) {
   for (const [position, renderable] of world.query(Position, Renderable)) {
     renderable.sprite.position.set(position.x, position.y);
   }
 }
 
-function carrySystem(world: IWorld<Resources>) {
+function carrySystem(world: CatHerder.World<Resources>) {
   const playerRender = world.get(Renderable, world.resources.player);
   const playerPosition = world.get(Position, world.resources.player);
 
@@ -287,7 +288,7 @@ function carrySystem(world: IWorld<Resources>) {
   }
 }
 
-function obstacleSystem(world: IWorld<Resources>) {
+function obstacleSystem(world: CatHerder.World<Resources>) {
   const playerRender = world.get(Renderable, world.resources.player);
   const playerLife = world.get(Life, world.resources.player);
   if (playerRender != null && playerLife != null) {
@@ -306,7 +307,7 @@ function obstacleSystem(world: IWorld<Resources>) {
   }
 }
 
-function winningSystem(world: IWorld<Resources>) {
+function winningSystem(world: CatHerder.World<Resources>) {
   for (const [pickupRender,] of world.query(Renderable, PickupAble)) {
     for (const [exitRender,] of world.query(Renderable, Exit)) {
       if (hitTestRectangle(pickupRender.sprite, exitRender.sprite)) {
